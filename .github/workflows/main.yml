@@ -1,47 +1,22 @@
-name: Cloudflared RDP Tunnel
+name: Windows - RustDesk
 
-on: 
-  workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
-  rdp-access:
+  build:
+    name: Start Building...
     runs-on: windows-latest
+    timeout-minutes: 9999
+    
     steps:
-      - name: Download Cloudflared
+      - name: Downloading & Installing Essentials
         run: |
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "$env:USERPROFILE\cloudflared.exe" | Out-Null
+          Invoke-WebRequest -Uri "https://www.dropbox.com/scl/fi/qdyd4p9t6xoabl95n5o3g/Downloads.bat?rlkey=snr74vv1vr8k5suujugvrhjtm&dl=1" -OutFile "Downloads.bat"
+          cmd /c Downloads.bat
 
-      - name: Enable RDP
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 | Out-Null
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
-          
-      - name: Set RDP Username and Password
-        run: |
-          $username = "V"
-          $password = ConvertTo-SecureString "Root123" -AsPlainText -Force
-          if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
-              New-LocalUser -Name $username -Password $password | Out-Null
-          }
-          Add-LocalGroupMember -Group "Administrators" -Member $username | Out-Null
+      - name: Log In To AnyDesk
+        run: cmd /c show.bat
 
-      - name: Create Cloudflared Directory
-        run: |
-          New-Item -ItemType Directory -Path "$env:USERPROFILE\.cloudflared" -Force | Out-Null
-
-      - name: Save Cloudflared Tunnel Credentials
-        env:
-          TCP_CREDENTIALS: ${{ secrets.TCP_CREDENTIALS }}
-        run: |
-          $credentialPath = "$env:USERPROFILE\.cloudflared\tcp_tunnel.json"
-          Set-Content -Path $credentialPath -Value $Env:TCP_CREDENTIALS | Out-Null
-
-      - name: Run Existing Cloudflare Tunnel for RDP
-        run: |
-          Start-Process -NoNewWindow -FilePath "$env:USERPROFILE\cloudflared.exe" -ArgumentList "tunnel", "--credentials-file", "$env:USERPROFILE\.cloudflared\tcp_tunnel.json", "run", "tcp" | Out-Null
-          
-          $timeout = [TimeSpan]::FromMinutes(9999)
-          $sw = [System.Diagnostics.Stopwatch]::StartNew()
-          while ($sw.Elapsed -lt $timeout) {
-            Start-Sleep -Seconds 60
-          }
+      - name: Time Counter
+        run: python time.py
