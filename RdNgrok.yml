@@ -1,0 +1,48 @@
+name: Ngrok RDP Tunnel
+
+on: 
+  workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Download
+      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+
+    - name: Extract
+      run: Expand-Archive ngrok.zip
+
+    - name: Auth
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env: 
+        NGROK_AUTH_TOKEN: ${{ secrets.TOKEN }}
+
+    - name: Enable TS
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+
+    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+    - name: Create User
+      run: |
+        $password = ConvertTo-SecureString 'Root123' -AsPlainText -Force
+        New-LocalUser -Name 'V' -Password $password
+
+    - run: Add-LocalGroupMember -Group "Administrators" -Member 'V'
+
+    - name: Start ngrok Tunnel
+      id: start_tunnel
+      run: |
+        # Start ngrok in the background
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList 'tcp 3389' -PassThru | Out-Null
+        # Wait for ngrok to be fully up and running
+        Start-Sleep -Seconds 10
+        # Fetch ngrok URL
+        $ngrokURL = (Invoke-RestMethod http://localhost:4040/api/tunnels).tunnels[0].public_url
+        Write-Output "Ngrok URL: $ngrokURL"
+        # Keep the script running indefinitely
+        while ($true) {
+          Start-Sleep -Seconds 60
+        }
